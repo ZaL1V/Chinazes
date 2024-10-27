@@ -12,6 +12,7 @@ class LauncherThread(QtCore.QThread):
     
     launch_setup_signal = pyqtSignal(str, str)
     progress_update_signal = pyqtSignal(int, int, str)
+    process_finished_signal = pyqtSignal()
     state_update_signal = pyqtSignal(bool)
 
     progress = 0
@@ -42,10 +43,14 @@ class LauncherThread(QtCore.QThread):
 
 
 
-        launch_minecraft(callback={ 'setStatus': self.update_progress_label, 'setProgress': self.update_progress, 'setMax': self.update_progress_max })
-
+        self.process = launch_minecraft(callback={
+            'setStatus': self.update_progress_label,
+            'setProgress': self.update_progress,
+            'setMax': self.update_progress_max
+        })
+        
+        self.process.finished.connect(self.on_process_finished)
         self.state_update_signal.emit(False)
-    
 
 
 class Ui_MainWindow(object):
@@ -71,20 +76,19 @@ class Ui_MainWindow(object):
         self.progressBar.setValue(0)
         self.progressBar.show()
         
-    def update_progress(self, value):
-        self.progressBar.setValue(value)
-
-    
+        
     def state_update(self, value):
         self.start_button.setDisabled(value)
         self.start_progress_label.setVisible(value)
         self.progressBar.setVisible(value)
-        if not value:
-            QTimer.singleShot(2000, QtWidgets.QApplication.quit)
+        
     def update_progress(self, progress, max_progress, label):
         self.progressBar.setValue(progress)
         self.progressBar.setMaximum(max_progress)
         self.start_progress_label.setText(label)
+        if "Installation complete" in label:
+            print("Closing launcher...")
+            QtCore.QTimer.singleShot(10000, MainWindow.hide)
         
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -182,19 +186,23 @@ class Ui_MainWindow(object):
         self.verticalLayout_2.addItem(spacerItem1)
         self.start_progress_label = QtWidgets.QLabel(self.centralwidget)
         self.start_progress_label.setText('')
+        self.start_progress_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.start_progress_label.setStyleSheet("""
+            QLabel {
+                color: white;  /* Колір тексту */
+                background: none;  /* Вимкнути фон */
+                padding: 0;  /* Без внутрішніх відступів */
+            }
+        """)
         self.start_progress_label.setVisible(False)
+        self.verticalLayout_2.addWidget(self.start_progress_label, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)  # Центруємо по горизонталі
         self.progressBar = QtWidgets.QProgressBar(self.centralwidget)
-        self.progressBar.setStyleSheet(
-            "QProgressBar {\n"
-            "border: 2px solid #0056b3;\n"
-            "border-radius: 10px;\n"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #e0e0e0, stop:1 #d0d0d0);\n"
-            "}\n"
-            "\n"
-            "QProgressBar::chunk {\n"
-            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0078d7, stop:1 #0056b3);\n"
-            "    border-radius: 10px;\n"
-            "}")
+        self.progressBar.setStyleSheet("""
+                                        QLabel {
+                                            font-size: 8px;
+                                            color: white;  /* Колір тексту */
+                                        }
+                                    """)
         self.progressBar.setProperty("value", 24)
         self.progressBar.setTextVisible(False)
         self.progressBar.setObjectName("progressBar")
