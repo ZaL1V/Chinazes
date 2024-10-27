@@ -3,7 +3,6 @@ import json
 import shutil
 import subprocess
 import minecraft_launcher_lib
-from PyQt5 import QtCore, QtGui, QtWidgets
 from uuid import uuid1
 
 def launch_minecraft(callback):
