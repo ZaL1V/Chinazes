@@ -1,11 +1,91 @@
-
-
+import os
+import json
+from PyQt5.QtCore import QTimer
+from random_username.generate import generate_username
 import minecraft_launcher_lib
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QThread, pyqtSignal, QSize, Qt
+from minecraft_launcher import launch_minecraft
 
-from .main import minecraft_directory
+
+class LauncherThread(QtCore.QThread):
+    
+    launch_setup_signal = pyqtSignal(str, str)
+    progress_update_signal = pyqtSignal(int, int, str)
+    state_update_signal = pyqtSignal(bool)
+
+    progress = 0
+    progress_max = 0
+    progress_label = ''
+
+    def __init__(self, username):
+        super().__init__()
+        self.launch_setup_signal.connect(self.launch_setup)
+        self.username = username
+
+    def launch_setup(self, version_id, username):
+        self.version_id = version_id
+        self.username = username
+    
+    def update_progress_label(self, value):
+        self.progress_label = value
+        self.progress_update_signal.emit(self.progress, self.progress_max, self.progress_label)
+    def update_progress(self, value):
+        self.progress = value
+        self.progress_update_signal.emit(self.progress, self.progress_max, self.progress_label)
+    def update_progress_max(self, value):
+        self.progress_max = value
+        self.progress_update_signal.emit(self.progress, self.progress_max, self.progress_label)
+
+    def run(self):
+        self.state_update_signal.emit(True)
+
+
+
+        launch_minecraft(callback={ 'setStatus': self.update_progress_label, 'setProgress': self.update_progress, 'setMax': self.update_progress_max })
+
+        self.state_update_signal.emit(False)
+    
+
 
 class Ui_MainWindow(object):
+
+    def start_minecraft(self):
+        new_username = self.Username.text()
+        if new_username == '':
+            new_username = generate_username()[0]
+        with open('options.json', 'r+') as f:
+            options = json.load(f)
+            options['username'] = new_username
+            f.seek(0)
+            json.dump(options, f, indent=4)
+            f.truncate()
+        
+        self.Username.hide()
+        self.start_button.hide()
+        self.launcher_thread = LauncherThread(new_username)
+        self.launcher_thread.state_update_signal.connect(self.state_update)
+        self.launcher_thread.progress_update_signal.connect(self.update_progress)
+        self.launcher_thread.start()
+
+        self.progressBar.setValue(0)
+        self.progressBar.show()
+        
+    def update_progress(self, value):
+        self.progressBar.setValue(value)
+
+    
+    def state_update(self, value):
+        self.start_button.setDisabled(value)
+        self.start_progress_label.setVisible(value)
+        self.progressBar.setVisible(value)
+        if not value:
+            QTimer.singleShot(2000, QtWidgets.QApplication.quit)
+    def update_progress(self, progress, max_progress, label):
+        self.progressBar.setValue(progress)
+        self.progressBar.setMaximum(max_progress)
+        self.start_progress_label.setText(label)
+        
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(600, 600)
@@ -19,10 +99,10 @@ class Ui_MainWindow(object):
         self.centralwidget.setMinimumSize(QtCore.QSize(600, 600))
         self.centralwidget.setMaximumSize(QtCore.QSize(600, 600))
         self.centralwidget.setStyleSheet("background-image: url(\"D:/PROJECTS/Project/App/Chinazes/images/OIG2.jpg\");\n"
-"background-size: 600px 600px;\n"
-"background-repeat: no-repeat;\n"
-"background-position: center;\n"
-"")
+                                          "background-size: 600px 600px;\n"
+                                          "background-repeat: no-repeat;\n"
+                                          "background-position: center;\n"
+                                          "")
         self.centralwidget.setObjectName("centralwidget")
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.centralwidget)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
@@ -32,134 +112,130 @@ class Ui_MainWindow(object):
         self.verticalLayout_2.addItem(spacerItem)
         self.Username = QtWidgets.QLineEdit(self.centralwidget)
         self.Username.setStyleSheet("QWidget {\n"
-"    background: qlineargradient(\n"
-"        x1:0, y1:0, x2:1, y2:1,\n"
-"        stop:0 #f7f7f7,  /* Світліший світло-сірий колір */\n"
-"        stop:1 #dcdcdc   /* Світло-сірий колір */\n"
-"    );\n"
-"}\n"
-"\n"
-"/* Стиль для прогрес-бару */\n"
-"QProgressBar {\n"
-"    border: 2px solid #888888;  /* Темніша рамка */\n"
-"    border-radius: 10px;        /* Згладжені кути */\n"
-"    background-color: #e0e0e0;  /* Світло-сірий фон прогрес-бару */\n"
-"}\n"
-"\n"
-"QProgressBar::chunk {\n"
-"    background: qlineargradient(\n"
-"        x1:0, y1:0, x2:1, y2:0,\n"
-"        stop:0 #888888, \n"
-"        stop:1 #555555\n"
-"    );\n"
-"    border-radius: 10px;        /* Згладжені кути для частини */\n"
-"}\n"
-"\n"
-"/* Стиль для кнопки */\n"
-"QPushButton {\n"
-"    background-color: #7a7a7a;  /* Темно-сірий фон кнопки */\n"
-"    color: white;                /* Колір тексту */\n"
-"    border: 2px solid #5a5a5a;  /* Темніша рамка */\n"
-"    border-radius: 10px;        /* Згладжені кути */\n"
-"    padding: 10px;              /* Внутрішні відступи */\n"
-"    font-size: 16px;            /* Розмір шрифту */\n"
-"    font-weight: bold;          /* Жирний шрифт */\n"
-"    transition: background-color 0.3s, color 0.3s;  /* Анімація переходу */\n"
-"    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);  /* Тінь для глибини */\n"
-"}\n"
-"\n"
-"QPushButton:hover {\n"
-"    background-color: #646464;  /* Колір при наведенні */\n"
-"    color: #ffffff;              /* Колір тексту при наведенні */\n"
-"}\n"
-"\n"
-"QPushButton:pressed {\n"
-"    background-color: #505050;   /* Темніший колір при натисканні */\n"
-"}\n"
-"\n"
-"/* Стиль для поля вводу юзернейма */\n"
-"QLineEdit {\n"
-"    background-color: #ffffff;   /* Білий фон для поля вводу */\n"
-"    color: #333333;              /* Темний колір тексту */\n"
-"    border: 2px solid #888888;   /* Темніша рамка */\n"
-"    border-radius: 10px;        /* Згладжені кути */\n"
-"    padding: 10px;              /* Внутрішні відступи */\n"
-"    font-size: 16px;            /* Розмір шрифту */\n"
-"}\n"
-"\n"
-"QLineEdit:focus {\n"
-"    border: 2px solid #555555;   /* Темніша рамка при фокусі */\n"
-"    background-color: #f0f0f0;   /* Світло-сірий фон при фокусі */\n"
-"}")
+                                     "    background: qlineargradient(\n"
+                                     "        x1:0, y1:0, x2:1, y2:1,\n"
+                                     "        stop:0 #f7f7f7,  /* Світліший світло-сірий колір */\n"
+                                     "        stop:1 #dcdcdc   /* Світло-сірий колір */\n"
+                                     "    );\n"
+                                     "}\n"
+                                     "\n"
+                                     "/* Стиль для прогрес-бару */\n"
+                                     "QProgressBar {\n"
+                                     "    border: 2px solid #888888;  /* Темніша рамка */\n"
+                                     "    border-radius: 10px;        /* Згладжені кути */\n"
+                                     "    background-color: #e0e0e0;  /* Світло-сірий фон прогрес-бару */\n"
+                                     "}\n"
+                                     "\n"
+                                     "QProgressBar::chunk {\n"
+                                     "    background: qlineargradient(\n"
+                                     "        x1:0, y1:0, x2:1, y2:0,\n"
+                                     "        stop:0 #888888, \n"
+                                     "        stop:1 #555555\n"
+                                     "    );\n"
+                                     "    border-radius: 10px;        /* Згладжені кути для частини */\n"
+                                     "}\n"
+                                     "\n"
+                                     "/* Стиль для кнопки */\n"
+                                     "QPushButton {\n"
+                                     "    background-color: #7a7a7a;  /* Темно-сірий фон кнопки */\n"
+                                     "    color: white;                /* Колір тексту */\n"
+                                     "    border: 2px solid #5a5a5a;  /* Темніша рамка */\n"
+                                     "    border-radius: 10px;        /* Згладжені кути */\n"
+                                     "    padding: 10px;              /* Внутрішні відступи */\n"
+                                     "    font-size: 16px;            /* Розмір шрифту */\n"
+                                     "    font-weight: bold;          /* Жирний шрифт */\n"
+                                     "    transition: background-color 0.3s, color 0.3s;  /* Анімація переходу */\n"
+                                     "    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);  /* Тінь для глибини */\n"
+                                     "}\n"
+                                     "\n"
+                                     "QPushButton:hover {\n"
+                                     "    background-color: #646464;  /* Колір при наведенні */\n"
+                                     "    color: #ffffff;              /* Колір тексту при наведенні */\n"
+                                     "}\n"
+                                     "\n"
+                                     "QPushButton:pressed {\n"
+                                     "    background-color: #505050;   /* Темніший колір при натисканні */\n"
+                                     "}\n"
+                                     "\n"
+                                     "/* Стиль для поля вводу юзернейма */\n"
+                                     "QLineEdit {\n"
+                                     "    background-color: #ffffff;   /* Білий фон для поля вводу */\n"
+                                     "    color: #333333;              /* Темний колір тексту */\n"
+                                     "    border: 2px solid #888888;   /* Темніша рамка */\n"
+                                     "    border-radius: 10px;        /* Згладжені кути */\n"
+                                     "    padding: 10px;              /* Внутрішні відступи */\n"
+                                     "    font-size: 16px;            /* Розмір шрифту */\n"
+                                     "}\n"
+                                     "\n"
+                                     "QLineEdit:focus {\n"
+                                     "    border: 2px solid #555555;   /* Темніша рамка при фокусі */\n"
+                                     "    background-color: #f0f0f0;   /* Світло-сірий фон при фокусі */\n"
+                                     "}")
         self.Username.setReadOnly(False)
         self.Username.setObjectName("lineEdit")
         self.Username.setPlaceholderText('Username')
+        with open('options.json', 'r') as f:
+            person_option = json.load(f)
+            self.Username.setText(person_option.get('username', ''))
         self.verticalLayout_2.addWidget(self.Username)
         spacerItem1 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Maximum)
         self.verticalLayout_2.addItem(spacerItem1)
+        self.start_progress_label = QtWidgets.QLabel(self.centralwidget)
+        self.start_progress_label.setText('')
+        self.start_progress_label.setVisible(False)
         self.progressBar = QtWidgets.QProgressBar(self.centralwidget)
-        self.progressBar.setStyleSheet("QProgressBar {\n"
-"    border: 2px solid #0056b3;\n"
-"    border-radius: 10px;\n"
-"    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #e0e0e0, stop:1 #d0d0d0);\n"
-"}\n"
-"\n"
-"QProgressBar::chunk {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0078d7, stop:1 #0056b3);\n"
-"    border-radius: 10px;\n"
-"}")
+        self.progressBar.setStyleSheet(
+            "QProgressBar {\n"
+            "border: 2px solid #0056b3;\n"
+            "border-radius: 10px;\n"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #e0e0e0, stop:1 #d0d0d0);\n"
+            "}\n"
+            "\n"
+            "QProgressBar::chunk {\n"
+            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0078d7, stop:1 #0056b3);\n"
+            "    border-radius: 10px;\n"
+            "}")
         self.progressBar.setProperty("value", 24)
         self.progressBar.setTextVisible(False)
         self.progressBar.setObjectName("progressBar")
+        self.progressBar.setVisible(False)
         self.verticalLayout_2.addWidget(self.progressBar)
+
         self.start_button = QtWidgets.QPushButton(self.centralwidget)
         self.start_button.setStyleSheet("QWidget {\n"
-"    background: qlineargradient(  /* Градієнт для фону вікна */\n"
-"        x1:0, y1:0, x2:1, y2:1,\n"
-"        stop:0 #f0f0f0,  /* Світло-сірий колір */\n"
-"        stop:1 #b0b0b0   /* Темніший сірий колір */\n"
-"    );\n"
-"}\n"
-"\n"
-"/* Стиль для прогрес-бару */\n"
-"QProgressBar {\n"
-"    border: 2px solid #888888;  /* Темніша рамка */\n"
-"    border-radius: 10px;        /* Згладжені кути */\n"
-"    background-color: #dcdcdc;  /* Світло-сірий фон прогрес-бару */\n"
-"}\n"
-"\n"
-"QProgressBar::chunk {\n"
-"    background: qlineargradient(  /* Градієнт для частини прогрес-бару */\n"
-"        x1:0, y1:0, x2:1, y2:0,\n"
-"        stop:0 #888888, \n"
-"        stop:1 #555555\n"
-"    );\n"
-"    border-radius: 10px;        /* Згладжені кути для частини */\n"
-"}\n"
-"\n"
-"/* Стиль для кнопки */\n"
-"QPushButton {\n"
-"    background-color: #7a7a7a;  /* Темно-сірий фон кнопки */\n"
-"    color: white;                /* Колір тексту */\n"
-"    border: 2px solid #5a5a5a;  /* Темніша рамка */\n"
-"    border-radius: 10px;        /* Згладжені кути */\n"
-"    padding: 10px;              /* Внутрішні відступи */\n"
-"    font-size: 16px;            /* Розмір шрифту */\n"
-"    font-weight: bold;          /* Жирний шрифт */\n"
-"    transition: background-color 0.3s, color 0.3s;  /* Анімація переходу */\n"
-"    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);  /* Тінь для глибини */\n"
-"}\n"
-"\n"
-"QPushButton:hover {\n"
-"    background-color: #646464;  /* Колір при наведенні */\n"
-"    color: #ffffff;              /* Колір тексту при наведенні */\n"
-"}\n"
-"\n"
-"QPushButton:pressed {\n"
-"    background-color: #505050;   /* Темніший колір при натисканні */\n"
-"}")
+                                         "    background: qlineargradient(  /* Градієнт для фону вікна */\n"
+                                         "        x1:0, y1:0, x2:1, y2:1,\n"
+                                         "        stop:0 #f0f0f0,  /* Світло-сірий колір */\n"
+                                         "        stop:1 #b0b0b0   /* Темніший сірий колір */\n"
+                                         "    );\n"
+                                         "}\n"
+                                         "\n"
+                                         "/* Стиль для кнопки */\n"
+                                         "QPushButton {\n"
+                                         "    background-color: #7a7a7a;  /* Темно-сірий фон кнопки */\n"
+                                         "    color: white;                /* Колір тексту */\n"
+                                         "    border: 2px solid #5a5a5a;  /* Темніша рамка */\n"
+                                         "    border-radius: 10px;        /* Згладжені кути */\n"
+                                         "    padding: 10px;              /* Внутрішні відступи */\n"
+                                         "    font-size: 16px;            /* Розмір шрифту */\n"
+                                         "    font-weight: bold;          /* Жирний шрифт */\n"
+                                         "    transition: background-color 0.3s, color 0.3s;  /* Анімація переходу */\n"
+                                         "    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);  /* Тінь для глибини */\n"
+                                         "}\n"
+                                         "\n"
+                                         "QPushButton:hover {\n"
+                                         "    background-color: #646464;  /* Колір при наведенні */\n"
+                                         "    color: #ffffff;              /* Колір тексту при наведенні */\n"
+                                         "}\n"
+                                         "\n"
+                                         "QPushButton:pressed {\n"
+                                         "    background-color: #505050;   /* Темніший колір при натисканні */\n"
+                                         "}")
         self.start_button.setObjectName("pushButton")
         self.start_button.setText('Start')
+        self.start_button.clicked.connect(self.start_minecraft)
+
+
         self.verticalLayout_2.addWidget(self.start_button)
         self.verticalLayout_3.addLayout(self.verticalLayout_2)
         MainWindow.setCentralWidget(self.centralwidget)
@@ -172,9 +248,10 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
-
-
-
+        
+        
+        
+        
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)

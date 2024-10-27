@@ -1,17 +1,15 @@
-import subprocess
-import minecraft_launcher_lib
+import os
+import json
+from PyQt5 import QtCore, QtGui, QtWidgets
+from design import Ui_MainWindow
+from minecraft_launcher import launch_minecraft
 
 
-version = input('Введіть версію')
-username = input('')
-minecraft_directory=minecraft_launcher_lib.utils.get_minecraft_directory().replace('minecraft', '.chinazes')
-
-minecraft_launcher_lib.install.install_minecraft_version(versionid=version, minecraft_directory=minecraft_directory)
-
-options = {
-    'username': username,
-    'uuid': '',
-    'token': ''
-}
-
-subprocess.call(minecraft_launcher_lib.command.get_minecraft_command(version=version, minecraft_directory=minecraft_directory, options=options))
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
